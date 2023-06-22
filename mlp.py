@@ -37,4 +37,14 @@ plt.show() # display all active figures
 
 # split into training, validation, test using train_test_split from scikit-learn (using what MNIST originally allocated as the 10k test set as our entire dataset)
 indices_train, indices_else = train_test_split(range(len(image_MNIST_test_set)), test_size=0.2) # 80% train, 20% validation and test
+image_train = image_MNIST_test_set[indices_train, :, :] # index, row, column
+label_train = label_MNIST_test_set[indices_train]
+image_else = image_MNIST_test_set[indices_else, :, :]
+label_else = label_MNIST_test_set[indices_else]
+
+indices_validation, indices_test = train_test_split(range(len(image_else)), test_size=0.5)
+image_validation = image_else[indices_validation, :, :]
+label_validation = label_else[indices_validation]
+image_test = image_else[indices_test, :, :]
+label_test = label_else[indices_test]
 
