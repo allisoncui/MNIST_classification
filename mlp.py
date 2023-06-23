@@ -19,7 +19,7 @@ import warnings
 torch.manual_seed(4460)
 np.random.seed(4460)
 
-# load and display MNIST
+# LOAD AND DISPLAY MNIST
 (image_MNIST_train_set, label_MNIST_train_set), (image_MNIST_test_set, label_MNIST_test_set) = MNIST.load_data() # all images are represented by a 2d array
 
 # display sample images and labels (optional)
@@ -47,4 +47,19 @@ image_validation = image_else[indices_validation, :, :]
 label_validation = label_else[indices_validation]
 image_test = image_else[indices_test, :, :]
 label_test = label_else[indices_test]
+
+# DATA PREPROCESSING
+# reformat images and labels so they can be fed into data loader (no need to use dataloader in this case)
+# convert numpy array to pytorch tensor, convert data type of tensor to 32 bit floats, reshapes tensor 
+image_train_torch = torch.from_numpy(image_train).type(torch.FloatTensor).view(-1,1,28,28) # -1 means size of that dimension will be automatically inferred, 1 along second dim (single channel image), height and width of 28x28 pixels
+label_train_torch = torch.from_numpy(label_train).type(torch.LongTensor)
+image_validation_torch = torch.from_numpy(image_validation).type(torch.FloatTensor).view(-1,1,28,28) # 1x28x28
+label_validation_torch = torch.from_numpy(label_validation).type(torch.LongTensor)
+image_test_torch = torch.from_numpy(image_test).type(torch.FloatTensor).view(-1,1,28,28) 
+label_test_torch = torch.from_numpy(label_test).type(torch.LongTensor)
+
+# dataset and dataloader
+train_dataset = TensorDataset(image_train_torch, label_train_torch) # uses TensorDataset (input data + corresponding labels)
+train_dataloader = DataLoader(train_dataset, batch_size=1000) # DataLoader responsible for batching data during training
+
 
