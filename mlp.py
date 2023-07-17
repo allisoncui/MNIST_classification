@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -20,23 +19,12 @@ torch.manual_seed(4460)
 np.random.seed(4460)
 
 # LOAD AND DISPLAY MNIST
-(image_MNIST_train_set, label_MNIST_train_set), (image_MNIST_test_set, label_MNIST_test_set) = MNIST.load_data() # all images are represented by a 2d array
+(image_MNIST_train_set, label_MNIST_train_set), (image_MNIST_test_set, label_MNIST_test_set) = MNIST.load_data() # images are represented by a 2d array
 
-# display sample images and labels (optional)
-row = 4
-col = 4
-fig = plt.figure(figsize = (12,15)) # creates new figure from matplotlib, figsize specifies size of image. figure object can plot multiple subplots
-for img_index in range(1, row*col+1): # loop iterates from 1 all the way to row * col (last index is excluded)
-    image = image_MNIST_test_set[img_index, :, :] # first dimension is indexed with img_index, : indicates we want to include all elements along remaining two dimensions (rows and columns)
-    ax = fig.add_subplot(row, col, img_index) # creates subplot within figure 'fig', row and col indicate number of rows and columns of subplots in the figure, img_index determines position of current subplot within grid of subplots
-    ax.set_xticks([]) # remove ticks on subplots
-    ax.set_yticks([])
-    ax.title.set_text("Label: " + str(label_MNIST_test_set[img_index])) # sets title of current subplot 
-    plt.imshow(image, cmap='gray') # displays image on current subplot
-plt.show() # display all active figures
-
+# DATA PREPROCESSING
 # split into training, validation, test using train_test_split from scikit-learn (using what MNIST originally allocated as the 10k test set as our entire dataset)
 indices_train, indices_else = train_test_split(range(len(image_MNIST_test_set)), test_size=0.2) # 80% train, 20% validation and test
+
 image_train = image_MNIST_test_set[indices_train, :, :] # index, row, column
 label_train = label_MNIST_test_set[indices_train]
 image_else = image_MNIST_test_set[indices_else, :, :]
@@ -48,13 +36,14 @@ label_validation = label_else[indices_validation]
 image_test = image_else[indices_test, :, :]
 label_test = label_else[indices_test]
 
-# DATA PREPROCESSING
-# reformat images and labels so they can be fed into data loader (no need to use dataloader in this case)
-# convert numpy array to pytorch tensor, convert data type of tensor to 32 bit floats, reshapes tensor 
+# reformat images and labels so they can be fed into data loader
+# convert numpy array to pytorch tensor + reshape 
 image_train_torch = torch.from_numpy(image_train).type(torch.FloatTensor).view(-1,1,28,28) # -1 means size of that dimension will be automatically inferred, 1 along second dim (single channel image), height and width of 28x28 pixels
 label_train_torch = torch.from_numpy(label_train).type(torch.LongTensor)
+
 image_validation_torch = torch.from_numpy(image_validation).type(torch.FloatTensor).view(-1,1,28,28) # 1x28x28
 label_validation_torch = torch.from_numpy(label_validation).type(torch.LongTensor)
+
 image_test_torch = torch.from_numpy(image_test).type(torch.FloatTensor).view(-1,1,28,28) 
 label_test_torch = torch.from_numpy(label_test).type(torch.LongTensor)
 
@@ -62,4 +51,80 @@ label_test_torch = torch.from_numpy(label_test).type(torch.LongTensor)
 train_dataset = TensorDataset(image_train_torch, label_train_torch) # uses TensorDataset (input data + corresponding labels)
 train_dataloader = DataLoader(train_dataset, batch_size=1000) # DataLoader responsible for batching data during training
 
+val_dataset = TensorDataset(image_validation_torch, label_validation_torch)
+val_dataloader = DataLoader(val_dataset, batch_size=1000)
+
+test_dataset = TensorDataset(image_test_torch, label_test_torch)
+test_dataloader = DataLoader(test_dataset, batch_size=1000)
+
+# MLP MODEL IMPLEMENTATION
+'''
+sets up basic MLP model with 3 FC layers and sigmoid activation layers between each layer, culminates in log softmax activation for classification
+reshape -> FC -> sigmoid -> FC -> sigmoid -> FC -> softmax -> cross entropy
+'''
+class MLPModel(nn.Module):
+    def __init__(self):                     # models' modules
+        super(MLPModel, self).__init__()    # base class in pytorch for defining neural network models
+        self.fc1 = nn.Linear(28*28, 128)    # (input features, output features), linear transformation layer in nn
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, 10)
+        
+    def forward(self, x):       # model architecture
+        x = x.view(-1, 28*28)   # reshape input tensor x
+        x = self.fc1(x)
+        x = F.sigmoid(x)
+        x = self.fc2(x)
+        x = F.sigmoid(x)
+        x = self.fc3(x)
+        return F.log_softmax(x, dim = 1)
+    
+our_MLP = MLPModel()
+
+optimizer = SGD(our_MLP.parameters(), lr = 0.1)
+
+# TRAIN MLP MODEL FOR CLASSIFICATION
+'''
+1. define number of epochs 
+2. define lists to keep train and validation losses at end of each epoch
+3. iterate over each epoch for training the model
+4. define list to keep track of loss for every epoch iteration
+5. set model to train mode so parameters can be updated
+6. training loop -- iterate over batches of training data using train_loader
+7. use model to predict labels for input data
+8. compute loss
+'''
+
+EPOCHS = 400
+
+train_epoch_loss = []
+val_epoch_loss = []
+
+for epoch in range(EPOCHS):
+    train_loss = []
+    
+    # TRAINING
+    our_MLP.train()
+    
+    for batch_index, (train_image, train_label) in enumerate(train_dataloader):
+        train_label_predicted = our_MLP(train_image)
+
+        loss = F.cross_entropy(train_label_predicted, train_label)
+        train_loss.append(loss.data.item())
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+    
+    train_epoch_loss.append(np.mean(train_loss))
+
+    # VALIDATION
+    our_MLP.eval()
+    
+    for batch_index, (val_image, val_label) in enumerate(val_dataloader):
+        val_label_predicted = our_MLP(val_image)
+        
+        loss = F.cross_entropy(val_label_predicted, val_label)
+        val_epoch_loss.append(loss.data.item())
+        
+    torch.save(our_MLP.state_dict(), './saved_MLP_models/checkpoint_epoch_%s.pth' % (epoch)) 
+        
 
